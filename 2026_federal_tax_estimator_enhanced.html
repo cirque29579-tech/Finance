@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>2026 Federal Income Tax Estimator</title>
+  <style>
+    :root{
+      --bg:#0b1020;
+      --card:#131a33;
+      --ink:#e8ecff;
+      --muted:#9fb1ff;
+      --accent:#6aa7ff;
+      --accent-2:#9df0c3;
+      --danger:#ff8a8a;
+      --border:#233065;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .wrap{max-width:1100px;margin:32px auto;padding:0 16px}
+    h1{font-size:28px;margin:0 0 8px}
+    .note{color:var(--muted);margin-bottom:20px}
+    .grid{display:grid;grid-template-columns:1.2fr 1fr;gap:20px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px}
+    .card h2{font-size:18px;margin:0 0 12px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:end;margin-bottom:14px}
+    label{display:block;font-weight:600;margin:10px 0 6px}
+    input, select{width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:#0f1530;color:var(--ink);box-sizing:border-box}
+    input[type="number"]{text-align:right}
+    .small{font-size:12px;color:var(--muted)}
+    .btn{display:inline-block;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--accent);color:#081022;font-weight:700;cursor:pointer}
+    .totals{display:grid;gap:8px}
+    .totals .line{display:flex;justify-content:space-between;border-bottom:1px dashed var(--border);padding:6px 0}
+    .totals .line strong{font-variant-numeric:tabular-nums}
+    .big{font-size:22px}
+    details{margin-top:8px}
+    code,kbd{background:#0f1530;padding:2px 6px;border-radius:6px;border:1px solid var(--border)}
+    .footer{margin-top:18px;color:var(--muted);font-size:12px}
+    a{color:var(--accent)}
+    @media (max-width: 900px){ .grid{grid-template-columns:1fr} .row{grid-template-columns:1fr} }
+    .pillrow{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}
+    .pill{display:flex;gap:8px;align-items:center;border:1px solid var(--border);border-radius:999px;padding:8px 10px;background:#0f1530}
+    .pill input{width:auto;margin:0}
+  
+    .info{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:999px;border:1px solid var(--border);background:#0f1530;color:var(--muted);font-size:12px;line-height:1;cursor:help;vertical-align:middle;margin-left:6px}
+    .actionRow{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    @media print{
+      :root{--bg:#ffffff;--card:#ffffff;--ink:#000000;--muted:#222;--border:#999;--accent:#000;--accent-2:#000;--danger:#000}
+      html,body{background:#fff !important;color:#000 !important}
+      .wrap{margin:0 auto;padding:0 8px}
+      .card{border:1px solid #999 !important;background:#fff !important;box-shadow:none !important}
+      .btn, details summary{display:none !important}
+      .pillrow{display:none !important}
+      input,select{border:1px solid #999 !important;background:#fff !important;color:#000 !important}
+      a{color:#000 !important;text-decoration:none}
+    }
+
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>2026 Federal Income Tax Estimator</h1>
+    <div class="note">
+      Updated for the IRS 2026 inflation adjustments and the 2025 law changes ("OBBBA"). This is an educational estimator.
+      It still ignores many real-world rules/phase-outs (SSTB/W-2 wage limits for QBI, passive loss limits, at-risk rules, AMT, NIIT, etc.).
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Your inputs</h2>
+
+        <div class="row">
+          <div>
+            <label for="status">Filing status</label>
+            <select id="status">
+              <option value="single">Single</option>
+              <option value="mfj">Married filing jointly</option>
+              <option value="mfs">Married filing separately</option>
+              <option value="hoh">Head of household</option>
+            </select>
+          </div>
+          <div>
+            <label>Aged 65+ checkboxes</label>
+            <div class="row" style="grid-template-columns:1fr 1fr;gap:8px">
+              <label><input type="checkbox" id="you65"/> You</label>
+              <label><input type="checkbox" id="spouse65"/> Spouse</label>
+            </div>
+            <div class="small">Adds the IRS additional standard deduction for aged or blind.</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="ordinary">Ordinary income (wages, interest, short-term gains)</label>
+            <input type="number" id="ordinary" value="0" min="0" step="100" />
+            <div class="small">For SE tax cap, we treat this as W-2 wages (simplification).</div>
+          </div>
+          <div>
+            <label for="biz">Business income/loss (Schedule C / 1099 net) <span class="info" title="Enter net profit (positive) or net loss (negative). This estimator treats it as ordinary income for income tax. Self-employment tax is estimated separately when enabled.">ⓘ</span></label>
+            <input type="number" id="biz" value="0" step="100" />
+            <div class="small">Negative number = loss. SE tax applies only to profit.</div>
+          </div>
+        </div>
+
+        <div class="pillrow">
+          <label class="pill"><input type="checkbox" id="includeSE" checked> Include self-employment tax (simplified) <span class="info" title="Simplified Schedule SE: net earnings = 92.35% of profit; Social Security 12.4% up to the 2026 wage base (shared with wages proxy); Medicare 2.9% on all net earnings; +0.9% Additional Medicare above threshold.">ⓘ</span></label>
+          <label class="pill"><input type="checkbox" id="includeQBI" checked> Include QBI (199A) deduction (simplified) <span class="info" title="Simplified 199A: 20% of qualified business income (profit), limited by 20% of taxable income excluding LTCG/QD. Includes a $400 minimum if QBI ≥ $1,000 (still limited by the overall cap). Ignores wage/property and SSTB limits.">ⓘ</span></label>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="qdiv">Qualified dividends & long-term capital gains</label>
+            <input type="number" id="qdiv" value="0" min="0" step="100" />
+          </div>
+          <div>
+            <label for="itemized">Itemized deductions (leave 0 to take standard)</label>
+            <input type="number" id="itemized" value="0" min="0" step="100" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="otherCredits">Other nonrefundable credits (optional)</label>
+            <input type="number" id="otherCredits" value="0" min="0" step="50" />
+          </div>
+          <div>
+            <label for="kids"># of qualifying children &lt; 17 (simplified CTC)</label>
+            <input type="number" id="kids" value="0" min="0" step="1" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>&nbsp;</label>
+            <div class="actionRow">
+              <button class="btn" id="calc" type="button">Calculate</button>
+              <button class="btn" id="reset" type="button" style="background:transparent;color:var(--ink)">Reset all</button>
+              <button class="btn" id="print" type="button" style="background:transparent;color:var(--ink)">Print / Save PDF</button>
+            </div>
+          </div>
+          <div></div>
+        </div>
+
+        <details>
+          <summary>What this includes (click)</summary>
+          <ul>
+            <li>2026 standard deduction + additional aged/blind amounts</li>
+            <li>2026 ordinary income tax brackets</li>
+            <li>2026 LTCG/qualified dividend thresholds</li>
+            <li>Simplified Child Tax Credit (nonrefundable; ignores phase-outs/refundability)</li>
+            <li><strong>Self-employment tax</strong> (simplified Schedule SE)</li>
+            <li><strong>½ SE tax deduction</strong> (above-the-line)</li>
+            <li><strong>QBI (199A) deduction</strong> (simplified; includes $400 minimum if QBI ≥ $1,000)</li>
+          </ul>
+        </details>
+      </div>
+
+      <div class="card">
+        <h2>Estimate</h2>
+        <div class="totals" id="out"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <h2>Assumptions & notes</h2>
+      <ul class="small">
+        <li><strong>SE tax (simplified):</strong> Applies to business profit only. Net earnings = 92.35% of profit. Social Security portion capped at the 2026 wage base ($184,500) using (ordinary income entered) as W-2 wages for the cap (simplification).</li>
+        <li><strong>½ SE tax deduction:</strong> Deducts half of the regular SE tax (12.4% + 2.9 components) and reduces taxable income.</li>
+        <li><strong>QBI deduction (simplified):</strong> QBI = business profit. Deduction = 20% of QBI, limited by 20% of taxable income excluding LTCG/qualified dividends. Includes the $400 minimum if QBI ≥ $1,000. Ignores SSTB/W-2 wage/property limits and phase-outs.</li>
+        <li>Does not model AMT, NIIT, QBI wage/property limits, self-employment retirement plans, itemized deduction details, or many credits.</li>
+      </ul>
+      <div class="footer">Always verify with a tax professional or official IRS worksheets before filing.</div>
+    </div>
+  </div>
+
+<script>
+const SD = { single: 16100, mfs: 16100, mfj: 32200, hoh: 24150 };
+const ADD_SD = { unmarried: 2050, default: 1650 };
+
+const BRACKETS = {
+  single: [
+    { upTo: 12400, rate: 0.10 },
+    { upTo: 50400, rate: 0.12 },
+    { upTo: 105700, rate: 0.22 },
+    { upTo: 201775, rate: 0.24 },
+    { upTo: 256225, rate: 0.32 },
+    { upTo: 640600, rate: 0.35 },
+    { upTo: Infinity, rate: 0.37 },
+  ],
+  mfj: [
+    { upTo: 24800, rate: 0.10 },
+    { upTo: 100800, rate: 0.12 },
+    { upTo: 211400, rate: 0.22 },
+    { upTo: 403550, rate: 0.24 },
+    { upTo: 512450, rate: 0.32 },
+    { upTo: 768700, rate: 0.35 },
+    { upTo: Infinity, rate: 0.37 },
+  ],
+  mfs: [
+    { upTo: 12400, rate: 0.10 },
+    { upTo: 50400, rate: 0.12 },
+    { upTo: 105700, rate: 0.22 },
+    { upTo: 201775, rate: 0.24 },
+    { upTo: 256225, rate: 0.32 },
+    { upTo: 384350, rate: 0.35 },
+    { upTo: Infinity, rate: 0.37 },
+  ],
+  hoh: [
+    { upTo: 17700, rate: 0.10 },
+    { upTo: 67450, rate: 0.12 },
+    { upTo: 105700, rate: 0.22 },
+    { upTo: 201750, rate: 0.24 },
+    { upTo: 256200, rate: 0.32 },
+    { upTo: 640600, rate: 0.35 },
+    { upTo: Infinity, rate: 0.37 },
+  ],
+};
+
+const LTCG_BANDS = {
+  mfj: { zero: 98900, fifteen: 613700 },
+  mfs: { zero: 49450, fifteen: 306850 },
+  hoh: { zero: 66200, fifteen: 579600 },
+  single: { zero: 49450, fifteen: 545500 },
+};
+
+const SS_WAGE_BASE_2026 = 184500;
+const SE_NET_FACTOR = 0.9235;
+
+const ADDL_MED_THRESH = {
+  single: 200000,
+  hoh: 200000,
+  mfj: 250000,
+  mfs: 125000
+};
+
+
+function parseCurrencyToNumber(str){
+  // keep digits, one leading -, and one decimal point
+  if (str == null) return 0;
+  str = String(str).trim();
+  const neg = str.startsWith('-');
+  // strip everything except digits and dots
+  let cleaned = str.replace(/[^0-9.]/g,'');
+  // keep only first dot
+  const parts = cleaned.split('.');
+  cleaned = parts.length > 1 ? (parts[0] + '.' + parts.slice(1).join('')) : cleaned;
+  const num = parseFloat(cleaned || '0');
+  return neg ? -num : num;
+}
+
+function formatCurrencyNumber(n){
+  const neg = n < 0;
+  const abs = Math.abs(n);
+  // show no cents if integer-ish; otherwise 2 decimals
+  const isInt = Math.abs(abs - Math.round(abs)) < 1e-9;
+  const opts = isInt
+    ? {maximumFractionDigits:0}
+    : {minimumFractionDigits:2, maximumFractionDigits:2};
+  const s = abs.toLocaleString(undefined, opts);
+  return (neg ? '-' : '') + '$' + s;
+}
+
+function formatCurrencyInputLive(el, allowNegative){
+  // Preserve caret by counting digits (and dot) to the left of caret in the raw string
+  const raw = el.value;
+  let caret = el.selectionStart || 0;
+
+  const leftRaw = raw.slice(0, caret);
+  const leftTokenCount = (leftRaw.match(/[0-9.]/g) || []).length;
+
+  let num = parseCurrencyToNumber(raw);
+  if (!allowNegative) num = Math.max(0, num);
+
+  const formatted = formatCurrencyNumber(num);
+  el.value = formatted;
+
+  // Restore caret based on token count in the formatted string
+  let seen = 0, newPos = formatted.length;
+  for (let i = 0; i < formatted.length; i++){
+    if (/[0-9.]/.test(formatted[i])) seen++;
+    if (seen >= leftTokenCount){ newPos = i + 1; break; }
+  }
+  try { el.setSelectionRange(newPos, newPos); } catch(e){}
+  // store numeric value for reads (optional)
+  el.dataset.num = String(num);
+}
+
+function attachCurrencyFormatting(){
+  const currencyIds = ['ordinary','biz','qdiv','itemized','otherCredits'];
+  for (const id of currencyIds){
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const allowNeg = (id === 'biz');
+    // initialize display
+    formatCurrencyInputLive(el, allowNeg);
+
+    el.addEventListener('focus', () => {
+      // show plain number for quick editing (no $/commas)
+      const num = parseCurrencyToNumber(el.value);
+      el.value = String(num);
+      // place cursor at end
+      try { el.setSelectionRange(el.value.length, el.value.length); } catch(e){}
+    });
+
+    el.addEventListener('input', () => {
+      // live format while typing
+      formatCurrencyInputLive(el, allowNeg);
+    });
+
+    el.addEventListener('blur', () => {
+      formatCurrencyInputLive(el, allowNeg);
+    });
+  }
+}
+
+function fmt(n){
+  return n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function money(n){
+  const sign = n < 0 ? "-" : "";
+  return sign + "$" + fmt(Math.abs(n));
+}
+
+function applyBrackets(amount, brackets){
+  let tax = 0, prevCap = 0;
+  for (const b of brackets){
+    const cap = b.upTo;
+    const taxableHere = Math.max(0, Math.min(amount, cap) - prevCap);
+    tax += taxableHere * b.rate;
+    if (amount <= cap) break;
+    prevCap = cap;
+  }
+  return tax;
+}
+
+function computeSE(status, wagesProxy, bizProfit){
+  const profit = Math.max(0, bizProfit);
+  const netEarn = profit * SE_NET_FACTOR;
+
+  const ssRoom = Math.max(0, SS_WAGE_BASE_2026 - Math.max(0, wagesProxy));
+  const ssTaxable = Math.min(netEarn, ssRoom);
+  const ssTax = ssTaxable * 0.124;
+
+  const medTax = netEarn * 0.029;
+
+  const thresh = ADDL_MED_THRESH[status];
+  const addlBase = Math.max(0, (Math.max(0, wagesProxy) + netEarn) - thresh);
+  const addlMedTax = addlBase * 0.009;
+
+  const halfDed = 0.5 * (ssTax + medTax);
+
+  return { profit, netEarn, ssTax, medTax, addlMedTax, seTax: ssTax + medTax + addlMedTax, halfDed };
+}
+
+function computeQBI(taxableIncomePreQBI, taxableLTCGBase, bizProfit, includeQBI){
+  const qbi = Math.max(0, bizProfit);
+  if (!includeQBI || qbi <= 0) return { qbi, qbiDed: 0, qbiCap: 0, qbiRaw: 0, qbiMinApplied: 0 };
+
+  const tiExclCapGains = Math.max(0, taxableIncomePreQBI - taxableLTCGBase);
+  const cap = 0.20 * tiExclCapGains;
+  const raw = 0.20 * qbi;
+
+  let ded = Math.min(raw, cap);
+
+  const minEligible = qbi >= 1000;
+  const minDed = minEligible ? 400 : 0;
+  if (minDed > 0) ded = Math.max(ded, Math.min(minDed, cap));
+
+  return { qbi, qbiDed: ded, qbiCap: cap, qbiRaw: raw, qbiMinApplied: (minEligible ? Math.min(400, cap) : 0) };
+}
+
+function compute() {
+  const status = document.getElementById('status').value;
+
+  const ordinaryInput = Math.max(0, parseCurrencyToNumber(document.getElementById('ordinary').value));
+  const biz = parseCurrencyToNumber(document.getElementById('biz').value);
+  const qdiv = Math.max(0, parseCurrencyToNumber(document.getElementById('qdiv').value));
+
+  const itemized = Math.max(0, parseCurrencyToNumber(document.getElementById('itemized').value));
+  const otherCredits = Math.max(0, parseCurrencyToNumber(document.getElementById('otherCredits').value));
+  const kids = Math.max(0, +document.getElementById('kids').value||0);
+
+  const you65 = document.getElementById('you65').checked;
+  const spouse65 = document.getElementById('spouse65').checked;
+
+  const includeSE = document.getElementById('includeSE').checked;
+  const includeQBI = document.getElementById('includeQBI').checked;
+
+  let ordinaryBeforeSE = Math.max(0, ordinaryInput + biz);
+
+  const se = includeSE ? computeSE(status, ordinaryInput, biz) : { profit: Math.max(0,biz), netEarn:0, ssTax:0, medTax:0, addlMedTax:0, seTax:0, halfDed:0 };
+
+  const ordinary = Math.max(0, ordinaryBeforeSE - se.halfDed);
+
+  let std = SD[status];
+  if (status === 'mfj' || status === 'mfs') {
+    std += (you65?ADD_SD.default:0) + (spouse65?ADD_SD.default:0);
+  } else {
+    std += (you65 ? ADD_SD.unmarried : 0);
+  }
+
+  const grossIncome = ordinary + qdiv;
+  const deduction = Math.max(std, itemized);
+
+  const taxableOrdinaryPreQBI = Math.max(0, ordinary - deduction);
+  const deductionLeft = Math.max(0, deduction - ordinary);
+  const taxableLTCGBase = Math.max(0, qdiv - deductionLeft);
+
+  const taxableIncomePreQBI = taxableOrdinaryPreQBI + taxableLTCGBase;
+
+  const qbiCalc = computeQBI(taxableIncomePreQBI, taxableLTCGBase, biz, includeQBI);
+  const taxableOrdinaryBase = Math.max(0, taxableOrdinaryPreQBI - qbiCalc.qbiDed);
+
+  const ordTax = applyBrackets(taxableOrdinaryBase, BRACKETS[status]);
+
+  const bands = LTCG_BANDS[status];
+  const incomeStack = taxableOrdinaryBase;
+  let cgTax = 0;
+
+  if (taxableLTCGBase > 0) {
+    const zCap = bands.zero;
+    const fCap = bands.fifteen;
+
+    const zeroRoom = Math.max(0, zCap - incomeStack);
+    const atZero = Math.min(taxableLTCGBase, zeroRoom);
+
+    const fifteenRoom = Math.max(0, fCap - (incomeStack + atZero));
+    const atFifteen = Math.min(Math.max(0, taxableLTCGBase - atZero), fifteenRoom);
+
+    const atTwenty = Math.max(0, taxableLTCGBase - atZero - atFifteen);
+
+    cgTax = atZero * 0 + atFifteen * 0.15 + atTwenty * 0.20;
+  }
+
+  const preCreditIncomeTax = ordTax + cgTax;
+
+  const CTC_PER_CHILD = 2200;
+  const ctcNonref = Math.min(preCreditIncomeTax, kids * CTC_PER_CHILD);
+
+  const totalCredits = ctcNonref + otherCredits;
+  const allowedCredits = Math.min(preCreditIncomeTax, totalCredits);
+
+  const incomeTax = Math.max(0, preCreditIncomeTax - allowedCredits);
+  const totalFederalTax = incomeTax + se.seTax;
+
+  render({
+    status,
+    ordinaryInput,
+    biz,
+    ordinaryBeforeSE,
+    se,
+    ordinary,
+    qdiv,
+    grossIncome,
+    std,
+    itemized,
+    deduction,
+    taxableOrdinaryPreQBI,
+    qbiCalc,
+    taxableOrdinaryBase,
+    taxableLTCGBase,
+    taxableIncomePreQBI,
+    ordTax,
+    cgTax,
+    preCreditIncomeTax,
+    ctcNonref,
+    otherCredits,
+    allowedCredits,
+    incomeTax,
+    totalFederalTax
+  });
+}
+
+function render(x){
+  const out = document.getElementById('out');
+  out.innerHTML = '';
+
+  const lines = [
+    ["Ordinary income (entered)", money(x.ordinaryInput)],
+    ["Business income/loss", (x.biz >= 0 ? money(x.biz) : "-" + money(Math.abs(x.biz)).replace("$","$"))],
+    ["Ordinary income (after ½ SE deduction)", money(x.ordinary)],
+    ["Qualified dividends/LTCG", money(x.qdiv)],
+    ["Gross income", money(x.grossIncome)],
+    ["Deduction used", money(x.deduction) + (x.deduction===x.itemized ? " (itemized)" : " (standard)")],
+    ["Taxable ordinary (pre-QBI)", money(x.taxableOrdinaryPreQBI)],
+    ["QBI deduction (199A)", "-" + money(x.qbiCalc.qbiDed).replace("$","$")],
+    ["Taxable ordinary (used)", money(x.taxableOrdinaryBase)],
+    ["Taxable LTCG/qualified dividends", money(x.taxableLTCGBase)],
+    ["Income tax (before credits)", money(x.preCreditIncomeTax)],
+    ["Child Tax Credit (nonrefundable applied)", "-" + money(x.ctcNonref).replace("$","$")],
+    ["Other nonrefundable credits", "-" + money(x.otherCredits).replace("$","$")],
+    ["Income tax (after credits)", money(x.incomeTax)],
+    ["Self-employment tax (est.)", money(x.se.seTax)],
+    ["Total federal tax (est.)", money(x.totalFederalTax)],
+  ];
+
+  for (const [k,v] of lines){
+    const div = document.createElement('div');
+    div.className = 'line';
+    const a = document.createElement('span');
+    a.textContent = k;
+    const b = document.createElement('strong');
+    b.textContent = v;
+    if (k === 'Total federal tax (est.)'){ b.classList.add('big'); }
+    div.append(a,b);
+    out.append(div);
+  }
+
+  const sub = document.createElement('div');
+  sub.className = 'small';
+  sub.innerHTML = `
+    <div style="margin-top:8px">
+      <strong>SE detail (simplified):</strong>
+      Net earnings = 92.35% of profit (${money(x.se.profit)} → ${money(x.se.netEarn)}).
+      SS tax = ${money(x.se.ssTax)} (capped at 2026 wage base),
+      Medicare = ${money(x.se.medTax)},
+      Addl Medicare = ${money(x.se.addlMedTax)}.
+      ½ SE deduction used = ${money(x.se.halfDed)}.
+    </div>
+    <div style="margin-top:6px">
+      <strong>QBI detail (simplified):</strong>
+      Raw 20% of QBI = ${money(x.qbiCalc.qbiRaw)}; overall cap = ${money(x.qbiCalc.qbiCap)}; deduction used = ${money(x.qbiCalc.qbiDed)}.
+    </div>
+    <div style="margin-top:8px">
+      This estimate ignores AMT, NIIT (3.8%), many limits/phase-outs, and most credits/deductions.
+    </div>
+  `;
+  out.append(sub);
+}
+
+
+document.getElementById('calc').addEventListener('click', compute);
+
+document.getElementById('print').addEventListener('click', () => {
+  // Use your browser's "Save as PDF" option
+  window.print();
+});
+
+document.getElementById('reset').addEventListener('click', () => {
+  // Restore defaults
+  document.getElementById('status').value = 'single';
+  document.getElementById('you65').checked = false;
+  document.getElementById('spouse65').checked = false;
+
+  document.getElementById('includeSE').checked = true;
+  document.getElementById('includeQBI').checked = true;
+
+  document.getElementById('kids').value = 0;
+
+  // numeric fields to 0 (currency-formatted)
+  for (const id of ['ordinary','biz','qdiv','itemized','otherCredits']){
+    const el = document.getElementById(id);
+    el.value = '0';
+  }
+
+  // re-init formatting + recalc
+  attachCurrencyFormatting();
+  compute();
+});
+
+// Attach currency formatting once DOM is ready (we're already at end of body)
+attachCurrencyFormatting();
+compute();
+
+</script>
+</body>
+</html>
